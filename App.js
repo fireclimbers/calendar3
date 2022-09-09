@@ -282,7 +282,7 @@ const App: () => Node = () => {
                   bg = colors.bad;
                 }
 
-                return <Pressable onPress={() => setSelectedDate(date)} key={item2} style={[styles.dayButton,{backgroundColor: bg}]}><Text style={styles.dayNum}>{date.substr(-2)}</Text></Pressable>
+                return <Pressable onPress={() => setSelectedDate(date)} key={item2} style={[styles.dayButton,{backgroundColor: bg}]}><Text style={[styles.dayNum,{color:selectedMonth.getMonth()+1 === parseInt(date.substr(2,2)) ? '#424242' : '#eeeeee'}]}>{date.substr(-2)}</Text></Pressable>
               })}
             </View>
           return null;
@@ -339,17 +339,18 @@ const App: () => Node = () => {
 };
 
 const colors = {
-  unmarked: '#b8e7f2',
-  selected: 'blue',
-  today: 'purple',
-  good: 'green',
-  cheat: 'orange',
-  bad: 'red',
+  unmarked: '#b2ebf2',
+  selected: '#2196f3',
+  today: '#9575cd',
+  good: '#81c784',
+  cheat: '#ffd54f',
+  bad: '#f06292',
+  nonMonth: '#eee',
   
-  pending: 'orange',
-  eaten: 'green',
-  grey: 'grey',
-  arrow: 'blue',
+  pending: '#ffc107',
+  eaten: '#66bb6a',
+  grey: '#90a4ae',
+  arrow: '#607d8b',
   
   inputBorder:'#eaeaea',
   light:'#f3f3f3'

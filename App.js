@@ -25,7 +25,7 @@ import { faXmark, faClock, faTrashCan, faPlus, faChevronRight, faChevronLeft, fa
 
 /* $FlowFixMe[missing-local-annot] The type annotation(s) required by Flow's
  * LTI update could not be added via codemod */
-const FoodModal = ({modalVisible, setModalVisible, foodItem, onChangeFoodItem, cals, onChangeCals, qty, onChangeQty, eaten, onChangeEaten, saveItem}): Node => {
+const FoodModal = ({modalVisible, setModalVisible, foodItem, onChangeFoodItem, cals, onChangeCals, qty, onChangeQty, eaten, onChangeEaten, saveItem, type,onChangeType}): Node => {
   const foodInput = useRef(null);
 
   return (
@@ -46,10 +46,10 @@ const FoodModal = ({modalVisible, setModalVisible, foodItem, onChangeFoodItem, c
             style={[styles.input,{width:'100%'}]}
             onChangeText={onChangeFoodItem}
             value={foodItem}
-            placeholder="Enter food"
+            placeholder={type === 'f' ? "Enter food" : "Enter exercise"}
             ref={foodInput}
           />
-          <View style={{flexDirection:'row'}}>
+          {type === 'f' && <View style={{flexDirection:'row'}}>
             <TextInput
               style={[styles.input,{flex:3}]}
               onChangeText={onChangeCals}
@@ -65,7 +65,22 @@ const FoodModal = ({modalVisible, setModalVisible, foodItem, onChangeFoodItem, c
               keyboardType="numeric"
             />
             <Pressable onPress={() => onChangeEaten(!eaten)} style={[styles.circleButton,{backgroundColor:eaten ? colors.eaten : colors.pending,marginTop:'auto',marginBottom:'auto',marginLeft:18}]}><FontAwesomeIcon style={styles.circleButtonIcon} icon={eaten ? faCheck : faClock} size={styles.circleButtonIcon.fontSize} /></Pressable>
-          </View>
+          </View>}
+          {type !== 'f' && <View style={{flexDirection:'row'}}>
+            <Pressable
+              onPress={() => onChangeType('w')}
+              style={{backgroundColor:type == 'w' ? colors.selected : colors.unmarked,padding:9,borderTopLeftRadius:3,borderBottomLeftRadius:3}}
+            >
+              <Text style={{fontSize:16,color:'white'}}>Workout</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onChangeType('c')}
+              style={{backgroundColor:type == 'c' ? colors.selected : colors.unmarked,padding:9,borderTopRightRadius:3,borderBottomRightRadius:3}}
+            >
+              <Text style={{fontSize:16,color:'white'}}>Cardio</Text>
+            </Pressable>
+            <Pressable onPress={() => onChangeEaten(!eaten)} style={[styles.circleButton,{backgroundColor:eaten ? colors.eaten : colors.pending,marginTop:'auto',marginBottom:'auto',marginLeft:18}]}><FontAwesomeIcon style={styles.circleButtonIcon} icon={eaten ? faCheck : faClock} size={styles.circleButtonIcon.fontSize} /></Pressable>
+          </View>}
           <Pressable
             onPress={saveItem}
             style={{backgroundColor:colors.good,padding:9,borderRadius:3,marginTop:24}}
@@ -109,10 +124,17 @@ const createCalendar = (d) => {
       // Add day to list
       calendarList.push(dateToStr(currentMonth));
 
+      let prevDay = currentMonth.getDate();
       currentMonth.setUTCDate(currentMonth.getUTCDate() + 1);
+      let currDay = currentMonth.getDate();
+      if (prevDay === currDay) {
+        currentMonth.setHours(currentMonth.getHours()+2);
+      }
+      //console.log(currentMonth.toLocaleString());
     }
   } while (currentMonth.getMonth() === month);
 
+  //console.log(calendarList)
   return calendarList;
 }
 
@@ -195,6 +217,7 @@ const App: () => Node = () => {
   const [foodIndex, setFoodIndex] = useState(-1);
 
   // Data to edit food item
+  const [type, onChangeType] = useState("");
   const [foodItem, onChangeFoodItem] = useState("");
   const [cals, onChangeCals] = useState("");
   const [qty, onChangeQty] = useState("1");
@@ -208,6 +231,7 @@ const App: () => Node = () => {
   }, [calendarList]);
 
   function prefillModal(item,index) {
+    onChangeType(item.t);
     onChangeFoodItem(item.n);
     onChangeCals(item.c);
     onChangeQty(item.q);
@@ -215,7 +239,8 @@ const App: () => Node = () => {
     setFoodIndex(index);
   }
 
-  function resetModal() {
+  function resetModal(type) {
+    onChangeType(type);
     onChangeFoodItem('');
     onChangeCals('');
     onChangeQty('1');
@@ -225,17 +250,42 @@ const App: () => Node = () => {
 
   function getTotal(d) {
     let total = 0;
-    if (!foodLists[d]) return total;
+    let workout = false;
+    let cardio = false;
+    if (!foodLists[d]) return {total,workout,cardio};
     for (let i=0;i<foodLists[d].length;i++) {
-      total += foodLists[d][i].q*foodLists[d][i].c;
+      if (foodLists[d][i].t === 'f') {
+        total += (foodLists[d][i].q || 0)*(foodLists[d][i].c || 0);
+      } else if (foodLists[d][i].t === 'w') {
+        workout = true;
+      } else if (foodLists[d][i].t === 'c') {
+        cardio = true;
+      }
     }
-    return total;
+    return {total,workout,cardio}
   }
 
   function changeMonth(inc) {
     const m = new Date(selectedMonth.getFullYear(),selectedMonth.getMonth()+inc,1)
     setSelectedMonth(m);
     setCalendarList(createCalendar(m));
+  }
+
+  function saveItem() {
+    let obj = {
+      t:type,
+      n:foodItem,
+      e:eaten
+    }
+    if (type === 'f') {
+      obj.c = cals;
+      obj.q = qty;
+    }
+    editFood(selectedDate,obj,foodIndex)
+      .then(value => {
+        setFoodLists({...foodLists, [selectedDate]: value}); 
+        setModalVisible(false)}
+      )
   }
 
   return (
@@ -269,20 +319,32 @@ const App: () => Node = () => {
                 let date = calendarList[index+index2];
                 // selected, today, goal, unmarked
                 let bg = colors.unmarked;
-                const total = getTotal(date);
+                const vals = getTotal(date);
                 if (date === selectedDate) {
                   bg = colors.selected;
                 } else if (date === dateToStr(today)) {
                   bg = colors.today;
-                } else if (total >= 1700 && total <= 2400) {
+                } else if (vals.total >= 1700 && vals.total <= 2400) {
                   bg = colors.good;
-                } else if (total > 2400 && total <= 3100) {
+                } else if (vals.total > 2400 && vals.total <= 3100) {
                   bg = colors.cheat;
-                } else if (total > 3100) {
+                } else if (vals.total > 3100) {
                   bg = colors.bad;
                 }
 
-                return <Pressable onPress={() => setSelectedDate(date)} key={item2} style={[styles.dayButton,{backgroundColor: bg}]}><Text style={[styles.dayNum,{color:selectedMonth.getMonth()+1 === parseInt(date.substr(2,2)) ? '#424242' : '#eeeeee'}]}>{date.substr(-2)}</Text></Pressable>
+                let fontSize = 9;
+
+                return <Pressable onPress={() => setSelectedDate(date)} key={item2} style={[styles.dayButton,{backgroundColor: bg}]}>
+                  <FontAwesomeIcon style={{color:'#ffffff00',fontSize:fontSize}} icon={faPlus} size={fontSize} />
+                  <Text style={[styles.dayNum,{color:selectedMonth.getMonth()+1 === parseInt(date.substr(2,2)) ? '#424242' : '#eeeeee'}]}>
+                    {date.substr(-2)}
+                  </Text>
+                  <View style={{flexDirection:'row',marginLeft:2}}>
+                    {vals.workout && <FontAwesomeIcon style={{color:'#424242',fontSize:fontSize}} icon={faDumbbell} size={fontSize} />}
+                    {vals.cardio && <FontAwesomeIcon style={{color:'#424242',fontSize:fontSize}} icon={faPersonRunning} size={fontSize} />}
+                    <FontAwesomeIcon style={{color:'#ffffff00',fontSize:fontSize}} icon={faPlus} size={fontSize} />
+                  </View>
+                </Pressable>
               })}
             </View>
           return null;
@@ -290,7 +352,7 @@ const App: () => Node = () => {
         <View style={{width:'100%',height:2,backgroundColor:'#dedede',marginTop:3,marginBottom:12}}/>
         <View style={{flexDirection:'row',justifyContent:'space-between',marginBottom:6,marginLeft:'10%',marginRight:'20%'}}>
           <Text style={{fontSize:22,fontWeight:'bold'}}>{displayFullDate(selectedDate)}</Text>
-          <Text style={{fontSize:22,fontWeight:'bold'}}>{getTotal(selectedDate)}</Text>
+          <Text style={{fontSize:22,fontWeight:'bold'}}>{getTotal(selectedDate).total}</Text>
         </View>
       </View>
 
@@ -300,6 +362,8 @@ const App: () => Node = () => {
           style={{backgroundColor: colors.light}}>
 
           {(foodLists[selectedDate] || []).map((item,index) => {
+            if (item.t !== 'f') return null;
+
             return <Pressable onPress={() => {prefillModal(item,index); setModalVisible(true)}} key={index} style={{flexDirection: "row",backgroundColor:colors.unmarked,padding:6,marginLeft:6,marginRight:6,marginTop:3,marginBottom:3,borderRadius:3,alignItems:'center'}}>
               <Text style={{flex:5,fontSize:16}}>{item.n+(item.q > 1 ? (' (x'+item.q+')') : '')}</Text>
               <Text style={{flex:1,textAlign:'right',marginRight:12,fontSize:16}}>{item.c*item.q}</Text>
@@ -312,12 +376,34 @@ const App: () => Node = () => {
             </Pressable>
           })}
 
-          <Pressable
-            onPress={() => {resetModal(); setModalVisible(true)}}
-            style={[styles.circleButton,{backgroundColor:colors.pending,alignSelf:'center',margin:18}]}
-          >
-            <FontAwesomeIcon style={styles.circleButtonIcon} icon={faPlus} size={styles.circleButtonIcon.fontSize} />
-          </Pressable>
+          {(foodLists[selectedDate] || []).map((item,index) => {
+            if (item.t === 'f') return null;
+            return <Pressable onPress={() => {prefillModal(item,index); setModalVisible(true)}} key={index} style={{flexDirection: "row",backgroundColor:'#a9c4d1',padding:6,marginLeft:6,marginRight:6,marginTop:3,marginBottom:3,borderRadius:3,alignItems:'center'}}>
+              <Text style={{flex:5,fontSize:16}}>{item.n}</Text>
+              <FontAwesomeIcon style={[styles.circleButtonIcon,{marginRight:15,color:'#424242'}]} icon={item.t === 'w' ? faDumbbell : faPersonRunning} size={styles.circleButtonIcon.fontSize} />
+              <Pressable 
+                onPress={() => editFood(selectedDate,{...item, e:!item.e},index).then(value => setFoodLists({...foodLists, [selectedDate]: value}))}
+                style={[styles.circleButton, {backgroundColor:item.e ? colors.eaten : colors.pending,marginRight:12}]}><FontAwesomeIcon style={styles.circleButtonIcon} icon={item.e ? faCheck : faClock} size={styles.circleButtonIcon.fontSize} /></Pressable>
+              <Pressable 
+                onPress={() => removeFood(selectedDate,index).then(value => {setFoodLists({...foodLists, [selectedDate]: value})})}
+                style={[styles.circleButton, {backgroundColor:colors.grey,marginRight:6}]}><FontAwesomeIcon style={styles.circleButtonIcon} icon={faTrashCan} size={styles.circleButtonIcon.fontSize} /></Pressable>
+            </Pressable>
+          })}
+
+          <View style={{flexDirection:'row',justifyContent:'center'}}>
+            <Pressable
+              onPress={() => {resetModal('f'); setModalVisible(true)}}
+              style={[styles.circleButton,{backgroundColor:colors.pending,alignSelf:'center',margin:18}]}
+            >
+              <FontAwesomeIcon style={styles.circleButtonIcon} icon={faAppleWhole} size={styles.circleButtonIcon.fontSize} />
+            </Pressable>
+            <Pressable
+              onPress={() => {resetModal('w'); setModalVisible(true)}}
+              style={[styles.circleButton,{backgroundColor:colors.arrow,alignSelf:'center',margin:18}]}
+            >
+              <FontAwesomeIcon style={styles.circleButtonIcon} icon={faDumbbell} size={styles.circleButtonIcon.fontSize} />
+            </Pressable>
+          </View>
           
         </View>
       </ScrollView>
@@ -332,11 +418,20 @@ const App: () => Node = () => {
             onChangeQty={onChangeQty}
             eaten={eaten}
             onChangeEaten={onChangeEaten}
-            saveItem={() => editFood(selectedDate,{t:'f',n:foodItem,c:cals,q:qty,e:eaten},foodIndex).then(value => {setFoodLists({...foodLists, [selectedDate]: value}); setModalVisible(false)})}
+            type={type}
+            onChangeType={onChangeType}
+            saveItem={saveItem}
           />
     </View>
   );
 };
+
+
+
+
+// color for workout button/row
+// color for cardio button/row
+
 
 const colors = {
   unmarked: '#b2ebf2',
